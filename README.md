@@ -49,7 +49,7 @@ Use Script Install CUDA CUDNN
 ```
 
 ## Remove Only
-Can remove Nvidia-driver, CUDA, CUDNN
+Can remove `Nvidia-driver`, `CUDA`, `CUDNN`
 ```bash
 ./Install_CUDA.sh --uninstall
 ```
