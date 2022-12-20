@@ -214,7 +214,9 @@ if [ "$1" != ${REMOVE_CMD} ]; then
     MSG_CUDNN_USE_LINUX="No"
   fi
 
-  CUDNN_USE_LINUX_MSG="Install CUDNN LINUX .tar FILE? [ Default ${MSG_CUDNN_USE_LINUX} ] (y/n): "
+
+  CUDNN_USE_LINUX_MSG="[ Default ${MSG_CUDNN_USE_LINUX} ] (y/n): "
+  echo -e "Install CUDNN LINUX .tar FILE?\n( If no will install .deb FILE )"
   read -p "${CUDNN_USE_LINUX_MSG}" VAR
   while [ "${VAR}" != "" ] && [ "${VAR}" != "y" ] && [ "${VAR}" != "n" ];
   do
@@ -266,7 +268,7 @@ fi
 
 ######################################################## REMOVE ###########################################################
 
-DRIVER_REMOVE=true
+DRIVER_REMOVE=false
 CUDA_REMOVE=false
 CUDNN_REMOVE=false
 
@@ -278,8 +280,10 @@ if [ "$1" = ${REMOVE_CMD} ]; then
   REMOVE_MSG="remove"
 fi
 
-if [ ${DRIVER_REMOVE} = true ]; then
+if [ ${DRIVER_REMOVE} = true ] && [ "$1" = ${REMOVE_CMD} ]; then
   MSG_REMOVE_DRIVER="Remove"
+elif [ ${DRIVER_REMOVE} = true ]; then
+  MSG_REMOVE_DRIVER="Reinstall"
 else
   MSG_REMOVE_DRIVER="Keep"
 fi
@@ -290,6 +294,8 @@ if [ $(dpkg -l | grep -c nvidia-driver) -ne 0 ]; then
   read -p "[ Default ${MSG_REMOVE_DRIVER} ] (k/r):" KEEP_VAR
   if [ "${KEEP_VAR}" != "" ] && [ "${KEEP_VAR}" = "r" ]; then
     DRIVER_REMOVE=true
+  elif [ "${KEEP_VAR}" = "" ] || [ "${KEEP_VAR}" = "k" ]; then
+    DRIVER_REMOVE=false
   fi
 fi
 
@@ -299,41 +305,44 @@ if [ -d "/usr/local/cuda" ] || [ $(dpkg -l | grep -c cuda) -ne 0 ] || [ $(ls /us
   echo "CUDA Exists! You want to keep or ${REMOVE_MSG}?"
   echo "If reinstall will remove CUDA and CUDNN"
   read -p "[ Default keep ] (k/r):" KEEP_VAR
-  if [ "$KEEP_VAR" != "" ] && [ "$KEEP_VAR" = "r" ]; then
+  if [ "${KEEP_VAR}" != "" ] && [ "${KEEP_VAR}" = "r" ]; then
     CUDA_REMOVE=true
     CUDNN_REMOVE=true
-  else
+  elif [ "${KEEP_VAR}" = "" ] || [ "${KEEP_VAR}" = "k" ]; then
+    CUDA_REMOVE=false
     CUDA_INSTALL=false
   fi
   CUDA_EXISTS=true
 fi
 
-if [ ${CUDA_EXISTS} = true ] && [ $CUDA_REMOVE = false ] && ([ -f "/usr/local/cuda/include/cudnn_version.h" ] || [ $(dpkg -l | grep -c cudnn) -ne 0 ] || [ $(ls /usr/share/keyrings | grep -c cudnn) -ne 0 ] || [ $(ls /etc/apt/sources.list.d | grep -c cudnn) -ne 0 ] || [ $(ls /usr/src | grep -c cudnn) -ne 0 ] || [ $(sudo apt-key list | grep -c "7FA2 AF80") -ne 0 ]); then
+if [ ${CUDA_EXISTS} = true ] && [ ${CUDA_REMOVE} = false ] && ([ -f "/usr/local/cuda/include/cudnn_version.h" ] || [ $(dpkg -l | grep -c cudnn) -ne 0 ] || [ $(ls /usr/share/keyrings | grep -c cudnn) -ne 0 ] || [ $(ls /etc/apt/sources.list.d | grep -c cudnn) -ne 0 ] || [ $(ls /usr/src | grep -c cudnn) -ne 0 ] || [ $(sudo apt-key list | grep -c "7FA2 AF80") -ne 0 ]); then
   echo "======================"
   echo "CUDNN Exists! You want to keep or ${REMOVE_MSG}?"
   read -p "[ Default keep ] (k/r):" KEEP_VAR
   if [ "${KEEP_VAR}" != "" ] && [ "${KEEP_VAR}" = "r" ]; then
     CUDNN_REMOVE=true
-  else
+  elif [ "${KEEP_VAR}" = "" ] || [ "${KEEP_VAR}" = "k" ]; then
+    CUDNN_REMOVE=false
     CUDNN_INSTALL=false
   fi
 fi
 
-if [ $CUDA_INSTALL = false ] && [ $CUDNN_INSTALL = false ]; then
+if [ ${CUDA_INSTALL} = false ] && [ ${CUDNN_INSTALL} = false ]; then
   exit 0
 fi
 
-TEMP_BUILD_DIR="build__temp__"
+TEMP_BUILD_DIR="__build__temp__"
+rm -rf ${TEMP_BUILD_DIR}
 mkdir ${TEMP_BUILD_DIR}
 cd ${TEMP_BUILD_DIR}
 
 # Remove Nvidia-Driver
-if [ $DRIVER_REMOVE = true ]; then
+if [ ${DRIVER_REMOVE} = true ]; then
   sudo apt remove --autoremove --purge -y *nvidia*
 fi
 
 # Remove CUDA
-if [ $CUDA_REMOVE = true ]; then
+if [ ${CUDA_REMOVE} = true ]; then
   if [ $(dpkg -l | grep -c cuda) -ne 0 ]; then
     sudo apt remove --autoremove --purge -y cuda*
   fi
@@ -343,7 +352,7 @@ if [ $CUDA_REMOVE = true ]; then
 fi
 
 # Remove CUDNN
-if [ $CUDNN_REMOVE = true ]; then
+if [ ${CUDNN_REMOVE} = true ]; then
   if [ $(dpkg -l | grep -c libcudnn) -ne 0 ]; then
     sudo apt remove --autoremove --purge -y libcudnn*
   fi
@@ -370,20 +379,20 @@ if [ "$1" = ${REMOVE_CMD} ]; then
   exit 0
 fi
 
-CUDA_VERSION_MAJOR=$(echo $CUDA_VERSION | cut -d . -f 1)
-CUDA_VERSION_MINOR=$(echo $CUDA_VERSION | cut -d . -f 2)
-CUDA_VERSION_PATCHLEVEL=$(echo $CUDA_VERSION | cut -d . -f 3)
+CUDA_VERSION_MAJOR=$(echo ${CUDA_VERSION} | cut -d . -f 1)
+CUDA_VERSION_MINOR=$(echo ${CUDA_VERSION} | cut -d . -f 2)
+CUDA_VERSION_PATCHLEVEL=$(echo ${CUDA_VERSION} | cut -d . -f 3)
 
 ########################################################## CUDA ###########################################################
 
-if [ $CUDA_INSTALL = true ]; then
+if [ ${CUDA_INSTALL} = true ]; then
   DRIVER_VERSION=${arr_driver[${CUDA_VERSION_INDEX}]}
   echo "install driver: ${DRIVER_VERSION}"
   
   # Install CUDA
   CUDA_PIN_FILENAME="cuda-ubuntu${Ubuntu_VERSION}.pin"
   
-  if [ -f $CUDA_PIN_FILENAME ]; then
+  if [ -f ${CUDA_PIN_FILENAME} ]; then
     echo "======================"
     echo "CUDA PIN Installation File Exists: ${CUDA_PIN_FILENAME}"
     echo "======================"
@@ -394,7 +403,7 @@ if [ $CUDA_INSTALL = true ]; then
   sudo mv ${CUDA_PIN_FILENAME} /etc/apt/preferences.d/cuda-repository-pin-600
 
   CUDA_FILENAME="cuda-repo-ubuntu${Ubuntu_VERSION}-${CUDA_VERSION_MAJOR}-${CUDA_VERSION_MINOR}-local_${CUDA_VERSION}-${DRIVER_VERSION}-1_amd64.deb"
-  if [ -f $CUDA_FILENAME ]; then
+  if [ -f ${CUDA_FILENAME} ]; then
     echo "======================"
     echo "CUDA Installation File Exists: ${CUDA_FILENAME}"
     echo "======================"
@@ -420,14 +429,14 @@ if [ $CUDA_INSTALL = true ]; then
   CHECK_CUDA_ENV_PATH=$(grep -c "${CUDA_ENV_PATH}" ${BASHRC_FILE})
   CHECK_CUDA_ENV_LIB_PATH=$(grep -c "${CUDA_ENV_LIB_PATH}" ${BASHRC_FILE})
   
-  if [ $CHECK_CUDA_ENV_PATH -eq 0 ] && [ $CHECK_CUDA_ENV_LIB_PATH -eq 0 ]; then
+  if [ ${CHECK_CUDA_ENV_PATH} -eq 0 ] && [ ${CHECK_CUDA_ENV_LIB_PATH} -eq 0 ]; then
     echo "# SETTING CUDA ENVIRONMENT" >> ${BASHRC_FILE}
     echo ${CUDA_ENV_PATH} >> ${BASHRC_FILE}
     echo ${CUDA_ENV_LIB_PATH} >> ${BASHRC_FILE}
-  elif [ $CHECK_CUDA_ENV_PATH -eq 0 ]; then
+  elif [ ${CHECK_CUDA_ENV_PATH} -eq 0 ]; then
     echo "# SETTING CUDA ENVIRONMENT" >> ${BASHRC_FILE}
     echo ${CUDA_ENV_PATH} >> ${BASHRC_FILE}
-  elif [ $CHECK_CUDA_ENV_LIB_PATH -eq 0 ]; then
+  elif [ ${CHECK_CUDA_ENV_LIB_PATH} -eq 0 ]; then
     echo "# SETTING CUDA ENVIRONMENT" >> ${BASHRC_FILE}
     echo ${CUDA_ENV_LIB_PATH} >> ${BASHRC_FILE}
   fi
@@ -437,14 +446,14 @@ fi
 
 ########################################################## CUDNN ##########################################################
 
-if [ $CUDNN_INSTALL = true ]; then
+if [ ${CUDNN_INSTALL} = true ]; then
 
-  CUDNN_VERSION_MAJOR=$(echo $CUDNN_VERSION | cut -d . -f 1)
-  CUDNN_VERSION_MINOR=$(echo $CUDNN_VERSION | cut -d . -f 2)
-  CUDNN_VERSION_PATCHLEVEL=$(echo $CUDNN_VERSION | cut -d . -f 3)
+  CUDNN_VERSION_MAJOR=$(echo ${CUDNN_VERSION} | cut -d . -f 1)
+  CUDNN_VERSION_MINOR=$(echo ${CUDNN_VERSION} | cut -d . -f 2)
+  CUDNN_VERSION_PATCHLEVEL=$(echo ${CUDNN_VERSION} | cut -d . -f 3)
 
-  if [ $CUDNN_USE_LINUX = true ]; then
-    if [ $CUDNN_VERSION_MAJOR -le 8 ] && [ $CUDNN_VERSION_MINOR -le 4 ]; then
+  if [ ${CUDNN_USE_LINUX} = true ]; then
+    if [ ${CUDNN_VERSION_MAJOR} -le 8 ] && [ ${CUDNN_VERSION_MINOR} -le 4 ]; then
       CUDNN_FILENAME_NO_EXT="cudnn-linux-x86_64-${CUDNN_VERSION}.${CUDNN_VERSION_LEVEL}_cuda${CUDNN_PAGE_VERSION}-archive"
       CUDNN_FILENAME="${CUDNN_FILENAME_NO_EXT}.tar.xz"
     else
@@ -458,7 +467,7 @@ if [ $CUDNN_INSTALL = true ]; then
   CUDNN_LIB_NAME="${CUDNN_VERSION}.${CUDNN_VERSION_LEVEL}-1+cuda${CUDNN_PAGE_VERSION}"
 
   # Install CUDNN
-  if [ -f $CUDNN_FILENAME ]; then
+  if [ -f ${CUDNN_FILENAME} ]; then
     echo "======================"
     echo "CUDNN Installation File Exists: ${CUDNN_FILENAME}"
     echo "======================"
@@ -466,7 +475,7 @@ if [ $CUDNN_INSTALL = true ]; then
     wget https://developer.download.nvidia.com/compute/redist/cudnn/v${CUDNN_VERSION}/local_installers/${CUDNN_PAGE_VERSION}/${CUDNN_FILENAME}
   fi
 
-  if [ $CUDNN_USE_LINUX = true ]; then
+  if [ ${CUDNN_USE_LINUX} = true ]; then
     tar -xvf ${CUDNN_FILENAME}
     sudo cp ${CUDNN_FILENAME_NO_EXT}/include/cudnn*.h /usr/local/cuda/include 
     sudo cp -P ${CUDNN_FILENAME_NO_EXT}/lib/libcudnn* /usr/local/cuda/lib64 
@@ -474,7 +483,7 @@ if [ $CUDNN_INSTALL = true ]; then
     sudo rm -rf ${CUDNN_FILENAME_NO_EXT}
   else
     sudo dpkg -i ${CUDNN_FILENAME}
-    if [ $CUDNN_VERSION = "8.4.0" ]; then
+    if [ ${CUDNN_VERSION} = "8.4.0" ]; then
       sudo apt-key add /var/cudnn-local-repo-ubuntu${Ubuntu_VERSION}-${CUDNN_VERSION}.${CUDNN_VERSION_LEVEL}/*.pub
     else
       sudo cp /var/cudnn-local-repo-*/cudnn-local-*-keyring.gpg /usr/share/keyrings/
@@ -482,7 +491,7 @@ if [ $CUDNN_INSTALL = true ]; then
     sudo apt-get update
     sudo apt-get -y install libcudnn8=${CUDNN_LIB_NAME}
     sudo apt-get -y install libcudnn8-dev=${CUDNN_LIB_NAME}
-    if [ $CUDNN_INSTALL_SAMPLE = true ]; then
+    if [ ${CUDNN_INSTALL_SAMPLE} = true ]; then
       sudo apt-get -y install libfreeimage3 libfreeimage-dev
       sudo apt-get -y install libcudnn8-samples=${CUDNN_LIB_NAME}
       cd /usr/src/cudnn*/mnistCUDNN
