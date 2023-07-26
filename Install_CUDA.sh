@@ -288,7 +288,9 @@ else
     MSG_REMOVE_DRIVER="Keep"
 fi
 
-if [ $(dpkg -l | grep -c nvidia-driver) -ne 0 ]; then
+if [ $(dpkg -l | grep -c nvidia-driver) -ne 0 ] \
+    || [ -f "/usr/bin/nvidia-smi" ] \
+    || [ -f "/usr/bin/nvidia-uninstall" ]; then
     echo "======================"
     echo "Nvidia-Driver Exists! You want to keep or ${REMOVE_MSG}?"
     read -p "[ Default ${MSG_REMOVE_DRIVER} ] (k/r):" KEEP_VAR
@@ -300,7 +302,11 @@ if [ $(dpkg -l | grep -c nvidia-driver) -ne 0 ]; then
 fi
 
 CUDA_EXISTS=false
-if [ -d "/usr/local/cuda" ] || [ $(dpkg -l | grep -c cuda) -ne 0 ] || [ $(ls /usr/share/keyrings | grep -c cuda) -ne 0 ] || [ $(ls /etc/apt/sources.list.d | grep -c cuda) -ne 0 ]; then
+if [ -d "/usr/local/cuda" ] \
+    || [ $(dpkg -l | grep cuda | grep -v repo- | wc -l) -ne 0 ] \
+    || [ $(ls /usr/share/keyrings | grep -c cuda) -ne 0 ] \
+    || [ $(ls /etc/apt/sources.list.d | grep -c cuda) -ne 0 ]; then
+
     echo "======================"
     echo "CUDA Exists! You want to keep or ${REMOVE_MSG}?"
     echo "If reinstall will remove CUDA and CUDNN"
@@ -315,7 +321,15 @@ if [ -d "/usr/local/cuda" ] || [ $(dpkg -l | grep -c cuda) -ne 0 ] || [ $(ls /us
     CUDA_EXISTS=true
 fi
 
-if [ ${CUDA_EXISTS} = true ] && [ ${CUDA_REMOVE} = false ] && ([ -f "/usr/local/cuda/include/cudnn_version.h" ] || [ $(dpkg -l | grep -c cudnn) -ne 0 ] || [ $(ls /usr/share/keyrings | grep -c cudnn) -ne 0 ] || [ $(ls /etc/apt/sources.list.d | grep -c cudnn) -ne 0 ] || [ $(ls /usr/src | grep -c cudnn) -ne 0 ] || [ $(sudo apt-key list | grep -c "7FA2 AF80") -ne 0 ]); then
+if [ ${CUDA_EXISTS} = true ] \
+    && [ ${CUDA_REMOVE} = false ] \
+    && ([ -f "/usr/local/cuda/include/cudnn_version.h" ] \
+        || [ $(dpkg -l | grep cudnn | grep -v repo- | wc -l) -ne 0 ] \
+        || [ $(ls /usr/share/keyrings | grep -c cudnn) -ne 0 ] \
+        || [ $(ls /etc/apt/sources.list.d | grep -c cudnn) -ne 0 ] \
+        || [ $(ls /usr/src | grep -c cudnn) -ne 0 ] \
+        || [ $(sudo apt-key list | grep -c "7FA2 AF80") -ne 0 ]); then
+
     echo "======================"
     echo "CUDNN Exists! You want to keep or ${REMOVE_MSG}?"
     read -p "[ Default keep ] (k/r):" KEEP_VAR
@@ -352,6 +366,10 @@ if [ ${CUDA_REMOVE} = true ]; then
     sudo rm -rf /usr/local/cuda* \
         /usr/share/keyrings/cuda* \
         /etc/apt/sources.list.d/cuda*
+    
+    if [ $(dpkg -l | grep cuda | grep -c repo-) -ne 0 ]; then
+        sudo dpkg -P $(dpkg -l | grep cuda | grep repo- | awk '{print $2}')
+    fi
 fi
 
 # Remove CUDNN
@@ -370,6 +388,10 @@ if [ ${CUDNN_REMOVE} = true ]; then
         /usr/local/cuda/lib64/libcudnn* \
         /usr/share/keyrings/cudnn* \
         /etc/apt/sources.list.d/cudnn*
+    
+    if [ $(dpkg -l | grep cudnn | grep -c repo-) -ne 0 ]; then
+        sudo dpkg -P $(dpkg -l | grep cudnn | grep repo- | awk '{print $2}')
+    fi
 fi
 
 cd ..
