@@ -25,7 +25,7 @@ Welcome to the CUDA and cuDNN Installation Script repository! This script automa
 1. **Clone the Repository:**
 
    ```bash
-   git clone https://github.com/your-username/cuda-cudnn-install-script.git
+   git clone https://github.com/your-username/Nvidia-toolkits.git
    cd cuda-cudnn-install-script
    ```
 
@@ -74,4 +74,4 @@ This project is licensed under the MIT License.
 
 Thank you to NVIDIA for providing CUDA and cuDNN, enabling accelerated AI and scientific research computing.
 
-## 🚀 Happy computing with CUDA and cuDNN! If you encounter any issues or have suggestions, please [open an issue](https://github.com/Facadedevil/cuda-cudnn-install-script/issues).
+## 🚀 Happy computing with CUDA and cuDNN! If you encounter any issues or have suggestions, please [open an issue](https://github.com/Facadedevil/Nvidia-toolkits/issues).
