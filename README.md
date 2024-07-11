@@ -43,7 +43,7 @@ Welcome to the CUDA and cuDNN Installation Script repository! This script automa
    Execute the script and follow the prompts:
 
    ```bash
-   ./install_cuda_cudnn.sh
+   ./Install_CUDA.sh
    ```
 
    The script will handle the rest, downloading necessary files and guiding you through installation.
