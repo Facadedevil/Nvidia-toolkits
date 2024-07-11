@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e  # Exit immediately on error
 
 ################################################### CONFIGURATION #####################################################
 
@@ -79,23 +80,16 @@ function install_cuda() {
 
     echo "Installing CUDA $cuda_version..."
     echo "Downloading CUDA installation file: $cuda_filename"
-    wget -O $cuda_filename "https://developer.download.nvidia.com/compute/cuda/$cuda_version/local_installers/$cuda_filename" || { echo "Failed to download CUDA installer."; exit 1; }
+    wget -O $cuda_filename "https://developer.download.nvidia.com/compute/cuda/$cuda_version/local_installers/$cuda_filename" > wget.log 2>&1
+    check_command_success
 
     echo "Downloading CUDA pin file: $cuda_pin_filename"
-    wget -O $cuda_pin_filename "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${Ubuntu}/x86_64/$cuda_pin_filename" || { echo "Failed to download CUDA pin file."; exit 1; }
+    wget -O $cuda_pin_filename "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${Ubuntu}/x86_64/$cuda_pin_filename" > wget.log 2>&1
+    check_command_success
 
     echo "Installing CUDA from package..."
-    sudo mv $cuda_pin_filename /etc/apt/preferences.d/cuda-repository-pin-600 || { echo "Failed to move CUDA pin file."; exit 1; }
-    sudo dpkg -i $cuda_filename || { echo "Failed to install CUDA package."; exit 1; }
-
-    if [[ $cuda_major_version -le 11 ]] && [[ $cuda_minor_version -le 6 ]]; then
-        sudo apt-key add /var/cuda-repo-ubuntu${Ubuntu}-${cuda_major_version}-${cuda_minor_version}-local/*.pub || { echo "Failed to add CUDA apt-key."; exit 1; }
-    else
-        sudo cp /var/cuda-repo-ubuntu${Ubuntu}-${cuda_major_version}-${cuda_minor_version}-local/cuda-*-keyring.gpg /usr/share/keyrings/ || { echo "Failed to copy CUDA keyring."; exit 1; }
-    fi
-
-    sudo apt-get update || { echo "Failed to update apt repositories."; exit 1; }
-    sudo apt-get install -y cuda || { echo "Failed to install CUDA."; exit 1; }
+    sudo dpkg -i $cuda_filename > dpkg.log 2>&1
+    check_command_success
 
     # Set environment variables
     CUDA_ENV_PATH="export PATH=/usr/local/cuda-${cuda_major_version}.${cuda_minor_version}/bin:\$PATH"
@@ -123,104 +117,91 @@ function install_cudnn() {
     if [ ${CUDNN_USE_LINUX} = true ]; then
         cudnn_filename="cudnn-linux-x64-${cudnn_version}.tar.xz"
         cudnn_filename_no_ext="cudnn-linux-x64-${cudnn_version}"
+
+        echo "Installing cuDNN $cudnn_version..."
+        echo "Downloading cuDNN installation file: $cudnn_filename"
+        wget -O $cudnn_filename "https://developer.download.nvidia.com/compute/machine-learning/cudnn/${cudnn_level}/${cudnn_filename}" > wget.log 2>&1
+        check_command_success
+
+        tar -xf $cudnn_filename > tar.log 2>&1
+        check_command_success
+
+        sudo cp -P $cudnn_filename_no_ext/include/cudnn*.h /usr/local/cuda/include > cp.log 2>&1
+        check_command_success
+
+        sudo cp -P $cudnn_filename_no_ext/lib64/libcudnn* /usr/local/cuda/lib64 > cp.log 2>&1
+        check_command_success
+
+        sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn* > chmod.log 2>&1
+        check_command_success
+
     else
         cudnn_filename="libcudnn${cudnn_level}_${cudnn_version}-1+cuda${cudnn_cuda_version}_amd64.deb"
         cudnn_filename_no_ext="libcudnn${cudnn_level}_${cudnn_version}-1+cuda${cudnn_cuda_version}"
+
+        echo "Installing cuDNN $cudnn_version..."
+        echo "Downloading cuDNN installation file: $cudnn_filename"
+        wget -O $cudnn_filename "https://developer.download.nvidia.com/compute/machine-learning/cudnn/${cudnn_level}/${cudnn_filename}" > wget.log 2>&1
+        check_command_success
+
+        sudo dpkg -i $cudnn_filename > dpkg.log 2>&1
+        check_command_success
+
     fi
 
-    echo "Installing cuDNN $cudnn_version..."
-    echo "Downloading cuDNN installation file: $cudnn_filename"
-    wget -O $cudnn_filename "https://developer.download.nvidia.com/compute/cudnn/secure/$cudnn_version/Production/${cudnn_filename}" || { echo "Failed to download cuDNN installer."; exit 1; }
+    if [ ${CUDNN_INSTALL_SAMPLE} = true ]; then
+        echo "Installing cuDNN samples..."
+        sudo apt-get install -y libcudnn${cudnn_level}-samples > apt.log 2>&1
+        check_command_success
+    fi
+}
 
-    if [ ${CUDNN_USE_LINUX} = true ]; then
-        echo "Installing cuDNN from tar file..."
-        tar -xf $cudnn_filename || { echo "Failed to extract cuDNN tar file."; exit 1; }
-        sudo cp -P $cudnn_filename_no_ext/include/cudnn*.h /usr/local/cuda/include || { echo "Failed to copy cuDNN header files."; exit 1; }
-        sudo cp -P $cudnn_filename_no_ext/lib/libcudnn* /usr/local/cuda/lib64 || { echo "Failed to copy cuDNN library files."; exit 1; }
-        sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn* || { echo "Failed to set permissions for cuDNN files."; exit 1; }
-    else
-        echo "Installing cuDNN from Debian package..."
-        sudo dpkg -i $cudnn_filename || { echo "Failed to install cuDNN package."; exit 1; }
+function check_command_success() {
+    if [ $? -ne 0 ]; then
+        echo "Error: Command failed. Check logs for details."
+        exit 1
     fi
 }
 
 function uninstall_cuda() {
     echo "Uninstalling existing CUDA installation..."
-    sudo apt-get --purge remove "*cublas*" "*cufft*" "*curand*" "*cusolver*" "*cusparse*" "*npp*" "*nvjpeg*" "cuda*" "nsight*" -y || { echo "Failed to remove CUDA packages."; exit 1; }
-    sudo apt-get --purge remove "*nvidia*" -y || { echo "Failed to remove NVIDIA packages."; exit 1; }
-    sudo apt-get autoremove -y || { echo "Failed to autoremove packages."; exit 1; }
-    sudo apt-get clean || { echo "Failed to clean up packages."; exit 1; }
-    sudo rm -rf /usr/local/cuda* || { echo "Failed to remove CUDA directories."; exit 1; }
+    sudo apt-get --purge remove "*cublas*" "*cufft*" "*curand*" "*cusolver*" "*cusparse*" "*npp*" "*nvjpeg*" "cuda*" "nsight*" -y > apt.log 2>&1
+    check_command_success
+
+    if [[ $DRIVER_REMOVE == true ]]; then
+        sudo apt-get --purge remove "*nvidia*" -y > apt.log 2>&1
+        check_command_success
+    fi
+
+    sudo apt-get autoremove -y > apt.log 2>&1
+    check_command_success
+
+    sudo apt-get clean > apt.log 2>&1
+    check_command_success
+
+    sudo rm -rf /usr/local/cuda* > apt.log 2>&1
+    check_command_success
 }
 
-function uninstall_cudnn() {
-    echo "Uninstalling existing cuDNN installation..."
-    sudo dpkg -r libcudnn8 libcudnn8-dev libcudnn8-samples || { echo "Failed to remove cuDNN packages."; exit 1; }
-    sudo dpkg -P libcudnn8 libcudnn8-dev libcudnn8-samples || { echo "Failed to purge cuDNN packages."; exit 1; }
-    sudo apt-get autoremove -y || { echo "Failed to autoremove packages."; exit 1; }
-    sudo apt-get clean || { echo "Failed to clean up packages."; exit 1; }
-    sudo rm -rf /usr/local/cuda*/lib64/libcudnn* || { echo "Failed to remove cuDNN libraries."; exit 1; }
-    sudo rm -rf /usr/local/cuda*/include/cudnn*.h || { echo "Failed to remove cuDNN header files."; exit 1; }
+################################################### MAIN SCRIPT #####################################################
+
+function main() {
+    print_information
+
+    # Check if CUDA is already installed
+    if [[ -n "$(which nvcc)" ]]; then
+        echo "CUDA is already installed. Do you want to reinstall?"
+        read -rp "If so, existing installation will be removed. (y/N): " reinstall
+        if [[ "$reinstall" =~ ^[Yy]$ ]]; then
+            uninstall_cuda
+        fi
+    fi
+
+    # Install CUDA and cuDNN
+    install_cuda $CUDA_VERSION
+    install_cudnn $CUDNN_VERSION $CUDA_VERSION
+
+    echo "Installation completed successfully!"
 }
 
-function select_cuda_version() {
-    supported_cuda_versions=($(get_supported_cuda_versions))
-    if [ ${#supported_cuda_versions[@]} -eq 0 ]; then
-        echo "No supported CUDA versions found."
-        exit 1
-    fi
-
-    echo "Available CUDA versions: ${supported_cuda_versions[*]}"
-    read -rp "Enter CUDA version (default: ${CUDA_VERSION}): " input
-    if [ -n "$input" ]; then
-        CUDA_VERSION="$input"
-    fi
-}
-
-function select_cudnn_version() {
-    supported_cudnn_versions=($(get_supported_cudnn_versions))
-    if [ ${#supported_cudnn_versions[@]} -eq 0 ]; then
-        echo "No supported cuDNN versions found."
-        exit 1
-    fi
-
-    echo "Available cuDNN versions: ${supported_cudnn_versions[*]}"
-    read -rp "Enter cuDNN version (default: ${CUDNN_VERSION}): " input
-    if [ -n "$input" ]; then
-        CUDNN_VERSION="$input"
-    fi
-}
-
-function ask_to_remove_existing_installations() {
-    read -rp "Do you want to remove existing CUDA installation? (y/N): " cuda_remove
-    if [[ "$cuda_remove" =~ ^[Yy]$ ]]; then
-        CUDA_REMOVE=true
-    fi
-
-    read -rp "Do you want to remove existing cuDNN installation? (y/N): " cudnn_remove
-    if [[ "$cudnn_remove" =~ ^[Yy]$ ]]; then
-        CUDNN_REMOVE=true
-    fi
-}
-
-################################################### MAIN PROGRAM #####################################################
-
-print_information
-
-ask_to_remove_existing_installations
-
-if [ ${CUDA_REMOVE} = true ]; then
-    uninstall_cuda
-fi
-
-if [ ${CUDNN_REMOVE} = true ]; then
-    uninstall_cudnn
-fi
-
-select_cuda_version
-install_cuda "$CUDA_VERSION"
-
-select_cudnn_version
-install_cudnn "$CUDNN_VERSION" "$CUDA_VERSION"
-
-echo "CUDA and cuDNN installation completed successfully."
+main
