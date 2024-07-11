@@ -74,7 +74,4 @@ This project is licensed under the MIT License.
 
 Thank you to NVIDIA for providing CUDA and cuDNN, enabling accelerated AI and scientific research computing.
 
----
-
-🚀 Happy computing with CUDA and cuDNN! If you encounter any issues or have suggestions, please [open an issue](https://github.com/Facadedevil/cuda-cudnn-install-script/issues).
-```
+## 🚀 Happy computing with CUDA and cuDNN! If you encounter any issues or have suggestions, please [open an issue](https://github.com/Facadedevil/cuda-cudnn-install-script/issues).
