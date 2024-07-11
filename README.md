@@ -25,7 +25,7 @@ Welcome to the CUDA and cuDNN Installation Script repository! This script automa
 1. **Clone the Repository:**
 
    ```bash
-   git clone https://github.com/your-username/Nvidia-toolkits.git
+   git clone https://github.com/Facadedevil/Nvidia-toolkits.git
    cd cuda-cudnn-install-script
    ```
 
